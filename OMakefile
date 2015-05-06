@@ -1,0 +1,22 @@
+# Utilities that can't go into util/ because they depend on mysql-access
+
+OCAML_LIBS = $(OCAML_LIBS_apputil)
+
+FILES[] =
+  apputil_error_id
+  apputil_error_t
+  apputil_error_j
+  apputil_error_v
+  apputil_access
+  apputil_error
+  apputil_hook
+
+Atdgen(apputil_error, -j-std -j-defaults)
+OCamlLibrary(apputil, $(FILES))
+Meta(apputil)
+
+.DEFAULT: META apputil.cma apputil.cmxa
+
+.PHONY: clean
+clean:
+  rm -f *.o *.a *.cm* *~ *.annot *.run *.opt META
