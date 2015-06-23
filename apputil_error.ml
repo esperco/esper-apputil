@@ -3,7 +3,7 @@ open Lwt
 open Log
 open Apputil_error_t
 
-let report error_id error_msg =
+let report_error error_id error_msg =
   let t = Util_time.now () in
   let v = {
     error_id;
@@ -19,14 +19,22 @@ let report error_id error_msg =
        return ()
     )
 
+(*
+   Report a freshly-caught exception.
+   context_name can be anything like "api" or "daily agenda" or
+   "async exception".
+*)
+let report_exn context_name e =
+  let full_trace = Util_exn.string_of_exn e in
+  let error_id = Util_exn.trace_hash e in
+  logf `Error "[%s] Error #%s: exception %s"
+    context_name error_id full_trace;
+  report_error error_id (context_name ^ ": \n" ^ full_trace)
+
 (* Substitute for Lwt.catch *)
-let catch_and_report name f g =
+let catch_and_report context_name f g =
   catch f (fun e ->
-    let full_trace = Util_exn.string_of_exn e in
-    let error_id = Util_exn.trace_hash e in
-    logf `Error "Error #%s in %s: exception %s"
-      error_id name full_trace;
-    report error_id (name ^ ": \n" ^ full_trace) >>= fun () ->
+    report_exn context_name e >>= fun () ->
     g e
   )
 
