@@ -34,7 +34,10 @@ let report_exn context_name e =
 (* Substitute for Lwt.catch *)
 let catch_and_report context_name f g =
   catch f (fun e ->
-    report_exn context_name e >>= fun () ->
+    (match e with
+     | Lwt.Canceled when Util_shutdown.is_shutting_down () -> return ()
+     | e -> report_exn context_name e
+    ) >>= fun () ->
     g e
   )
 
