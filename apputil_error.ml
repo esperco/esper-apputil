@@ -53,7 +53,8 @@ let read_latest max_age f =
 
 let make_html_report l =
   match l with
-  | [] -> None
+  | [] ->
+      Some ("No error today!", "<p>Hurray!</p>")
   | l ->
       let buf = Buffer.create 1000 in
       let subject = "Uncaught exceptions over the last 24 hours" in
@@ -91,7 +92,7 @@ let send_daily_aggregate () =
     (error_id, !counter, example) :: l
   ) tbl []
   in
-  let all = List.sort (fun (a, _, _) (b, _, _) -> String.compare a b) all in
+  let all = List.sort (fun (_, n1, _) (_, n2, _) -> compare n2 n1) all in
   match make_html_report all with
   | None -> return ()
   | Some (subject, html_body) ->
