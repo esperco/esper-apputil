@@ -43,7 +43,11 @@ let catch_and_report context_name f g =
 
 (* Report the error but don't let the exception propagate *)
 let catch_report_ignore name f =
-  catch_and_report name f (fun e -> return ())
+  catch_and_report name f (fun e ->
+    logf `Error "Ignored, reported exception: %s"
+      (string_of_exn e);
+    return ()
+  )
 
 let read_latest max_age f =
   let min_ord = Util_time.(sub (now ()) max_age) in
