@@ -25,7 +25,7 @@ let report_error error_id error_msg =
    "async exception".
 *)
 let report_exn context_name e =
-  let full_trace = Util_exn.string_of_exn e in
+  let full_trace = Trax.to_string e in
   let error_id = Util_exn.trace_hash e in
   logf `Error "[%s] Error #%s: exception %s"
     context_name error_id full_trace;
@@ -34,7 +34,7 @@ let report_exn context_name e =
 (* Substitute for Lwt.catch *)
 let catch_and_report context_name f g =
   catch f (fun e ->
-    (match e with
+    (match Trax.unwrap e with
      | Lwt.Canceled when Util_shutdown.is_shutting_down () -> return ()
      | e -> report_exn context_name e
     ) >>= fun () ->
