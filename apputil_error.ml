@@ -101,7 +101,7 @@ let send_daily_aggregate () =
   | None -> return ()
   | Some (subject, html_body) ->
       let alerts_addr =
-        let conf = Config.get () in
+        let conf = Conf.get () in
         Email.of_string conf.Conf_t.developer_email
       in
       Email_esper.send_from_esper
