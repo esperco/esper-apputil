@@ -10,6 +10,7 @@ FILES[] =
   apputil_access
   apputil_error
   apputil_hook
+  apputil_worker
 
 Atdgen(apputil_error, -j-std -j-defaults)
 OCamlLibrary(apputil, $(FILES))
