@@ -105,7 +105,7 @@ let send_daily_aggregate () =
         Email.of_string conf.Conf_t.developer_email
       in
       Email_esper.send_from_esper
-        ~from: (`External (None, alerts_addr))
+        ~from:alerts_addr
         [alerts_addr]
         subject
         html_body
