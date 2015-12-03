@@ -108,7 +108,7 @@ let send_daily_aggregate () =
         ~from:alerts_addr
         [alerts_addr]
         subject
-        html_body
+        (`Html html_body)
 
 let main ~offset =
   Cmdline.parse_options ~offset [];
