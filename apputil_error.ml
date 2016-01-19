@@ -29,7 +29,17 @@ let report_exn context_name e =
   let error_id = Util_exn.trace_hash e in
   logf `Error "[%s] Error #%s: exception %s"
     context_name error_id full_trace;
-  report_error error_id (context_name ^ ": \n" ^ full_trace)
+  match Http_exn.classify (Trax.unwrap e) with
+  | `Client_error _ ->
+      (* Those would be client errors in an HTTP context and correspond
+         normally to user accounts that have become invalid
+         (access token was revoked, Google resource is gone, ...).
+         We don't report them. *)
+      return ()
+
+  | `Server_error
+  | `Other ->
+      report_error error_id (context_name ^ ": \n" ^ full_trace)
 
 (* Substitute for Lwt.catch *)
 let catch_and_report context_name f g =
