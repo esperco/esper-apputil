@@ -17,9 +17,9 @@ let save_pid pid_file =
     ~filename: pid_file
     ~text: (string_of_int (Unix.getpid()))
 
-let process_is_killable pid =
+let kill ~pid ~signal =
   try
-    Unix.kill pid 0;
+    Unix.kill pid signal;
     true
   with
   | Unix.Unix_error (Unix.ESRCH, _, _) ->
@@ -32,16 +32,74 @@ let process_is_killable pid =
       false
 
   | Unix.Unix_error (error, _, _) ->
-      logf `Info "Process %i is not killable: %s"
-        pid (Unix.error_message error);
+      logf `Info "Process %i is not killable with signal %i: %s"
+        pid signal (Unix.error_message error);
       false
 
-let previous_worker_is_still_running pid_file =
+(*
+   Return whether the process can be killed, i.e. roughly whether it exists.
+*)
+let process_is_killable pid =
+  kill ~pid ~signal:0
+
+
+(*
+   Determine the age of a process so we can kill it if it's gotten too old
+   when it shouldn't.
+   This works on Linux and returns None on MacOS.
+*)
+let linux_get_process_age pid =
+  let open Unix in
+  try
+    let creation_date = (stat ("/proc/" ^ string_of_int pid)).st_ctime in
+    let dt = Unix.gettimeofday () -. creation_date in
+    if dt >= 0. then Some dt
+    else None
+  with _ ->
+    None
+
+(*
+   Return (Some true) if process was killed, (Some false) if process
+   couldn't or shouldn't be killed, and None if we can't determine its age.
+*)
+let linux_kill_if_older_than pid max_age =
+  match linux_get_process_age pid with
+  | None -> None
+  | Some age ->
+      if age >= max_age then (
+        logf `Error "Found very old process %i. Killing it." pid;
+        Some (kill ~pid ~signal:Sys.sigkill)
+      )
+      else
+        Some false
+
+let previous_worker_is_still_running ?max_age pid_file =
   Apputil_error.catch_and_report
     "Apputil_worker.previous_worker_is_still_running"
     (fun () ->
        match get_previous_worker_pid pid_file with
        | None -> return false
-       | Some pid -> return (process_is_killable pid)
+       | Some pid ->
+           match process_is_killable pid with
+           | true ->
+               (match max_age with
+                | Some max_age ->
+                    (match linux_kill_if_older_than pid max_age with
+                     | None ->
+                         (* should not happen on Linux *)
+                         assert (not (Esper_config.is_prod ()));
+                         return true
+                     | Some true ->
+                         (* killed, no longer running *)
+                         return false
+                     | Some false ->
+                         (* not killed, still running *)
+                         return true
+                    )
+                | None ->
+                    return true
+               )
+           | false ->
+               return false
     )
     (fun e -> return false)
