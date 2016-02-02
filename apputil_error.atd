@@ -4,5 +4,6 @@ type timestamp = string wrap <ocaml module="Util_time">
 type error = {
   id: error_id;
   date: timestamp;
+  ~hi_prio: bool;
   msg: string;
 } <ocaml field_prefix="error_">

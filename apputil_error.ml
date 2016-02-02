@@ -8,6 +8,7 @@ let report_error error_id error_msg =
   let v = {
     error_id;
     error_date = t;
+    error_hi_prio = Util_prio.is_high_priority_job ();
     error_msg;
   } in
   catch
@@ -72,10 +73,12 @@ let make_html_report l =
   | l ->
       let buf = Buffer.create 1000 in
       let subject = "Uncaught exceptions over the last 24 hours" in
-      List.iter (fun (id, count, example) ->
+      List.iter (fun (id, count, hi_prio_count, example) ->
         bprintf buf "
 <h2>Error #%s</h2>
 <p>
+  High-priority count: %i
+  <br>
   Count: %i
   <br>
   Example:
@@ -83,7 +86,7 @@ let make_html_report l =
   </pre>
 </p>
 "
-          id count (Util_html.encode example)
+          id hi_prio_count count (Util_html.encode example)
       ) l;
       Some (subject, Buffer.contents buf)
 
@@ -91,22 +94,31 @@ let send_daily_aggregate () =
   let max_age = 86400. +. 60. in (* one day and some *)
   let tbl = Hashtbl.create 10 in
   read_latest max_age (fun x ->
-    let counter =
-      try fst (Hashtbl.find tbl x.error_id)
+    let counter, hi_prio_counter, example =
+      try Hashtbl.find tbl x.error_id
       with Not_found ->
         let example = x.error_msg in
         let counter = ref 0 in
-        Hashtbl.add tbl x.error_id (counter, example);
-        counter
+        let hi_prio_counter = ref 0 in
+        let v = (counter, hi_prio_counter, example) in
+        Hashtbl.add tbl x.error_id v;
+        v
     in
     incr counter;
+    if x.error_hi_prio then
+      incr hi_prio_counter;
     return ()
   ) >>= fun () ->
-  let all = Hashtbl.fold (fun error_id (counter, example) l ->
-    (error_id, !counter, example) :: l
+  let all = Hashtbl.fold (fun error_id (counter, hi_prio_counter, example) l ->
+    (error_id, !counter, !hi_prio_counter, example) :: l
   ) tbl []
   in
-  let all = List.sort (fun (_, n1, _) (_, n2, _) -> compare n2 n1) all in
+  let all = List.sort (fun (_, n1, hi1, _) (_, n2, hi2, _) ->
+    let c = compare hi2 hi1 in
+    if c <> 0 then c
+    else
+      compare n2 n1
+  ) all in
   match make_html_report all with
   | None -> return ()
   | Some (subject, html_body) ->
