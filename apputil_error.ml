@@ -132,6 +132,31 @@ let send_daily_aggregate () =
         subject
         (`Html html_body)
 
+(*
+   Run a job with low priority or high priority.
+   Non-HTTP exceptions are treated as internal server errors
+   and are converted into the corresponding HTTP exception to avoid
+   double-reporting.
+*)
+let with_priority is_high_priority f =
+  Lwt.with_value Util_prio.key (Some is_high_priority)
+    (fun () ->
+       catch f
+         (fun e ->
+            let error_msg = Log.string_of_exn e in
+            let error_id = Util_exn.trace_hash e in
+            match Http_exn.classify (Trax.unwrap e) with
+            | `Other ->
+                let public_msg = sprintf "Internal error #%s" error_id in
+                logf `Error "Internal error #%s: %s" error_id error_msg;
+                report_error error_id error_msg >>= fun () ->
+                Http_exn.internal_error public_msg
+            | `Server_error
+            | `Client_error _ ->
+                Trax.raise __LOC__ e
+         )
+    )
+
 let main ~offset =
   Cmdline.parse_options ~offset [];
   if Esper_config.is_prod () then
