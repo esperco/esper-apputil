@@ -49,14 +49,14 @@ let catch_and_report context_name f g =
      | Lwt.Canceled when Util_shutdown.is_shutting_down () -> return ()
      | e -> report_exn context_name e
     ) >>= fun () ->
+    logf `Error "Reported exception: %s"
+      (string_of_exn e);
     g e
   )
 
 (* Report the error but don't let the exception propagate *)
 let catch_report_ignore name f =
   catch_and_report name f (fun e ->
-    logf `Error "Ignored, reported exception: %s"
-      (string_of_exn e);
     return ()
   )
 
