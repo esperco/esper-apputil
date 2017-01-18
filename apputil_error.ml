@@ -62,7 +62,7 @@ let catch_report_ignore name f =
 
 let read_latest max_age f =
   let min_ord = Util_time.(sub (now ()) max_age) in
-  Apputil_access.Uncaught.iter ~min_ord (fun (error_id, random, x, t) ->
+  Apputil_access.Uncaught.iter ~min_ord (fun error_id random x t ->
     f x
   )
 
