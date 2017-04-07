@@ -13,7 +13,11 @@ let report_error error_id error_msg =
   } in
   catch
     (fun () ->
-       Apputil_access.Uncaught.put error_id (Util_rng.hex 8) v
+       (* `unprotected_put`, unlike just `put`, avoids creating a lock,
+          so as to not create a bottleneck when many identical errors
+          are reported at the same time. *)
+       Apputil_access.Uncaught.unprotected_put
+         error_id (Util_rng.hex 8) v (Util_time.now ())
     )
     (fun e ->
        logf `Error "Error.report failed: %s" (string_of_exn e);
