@@ -9,6 +9,7 @@ let report_error error_id error_msg =
     error_id;
     error_date = t;
     error_hi_prio = Util_prio.is_high_priority_job ();
+    error_service = Log.get_service ();
     error_msg;
   } in
   catch
@@ -70,6 +71,14 @@ let read_latest max_age f =
     f x
   )
 
+let format_service_counts l =
+  String.concat ", " (
+    BatList.map (fun (k, n) ->
+      sprintf "%s: %i"
+        (Util_html.encode k) n
+    ) l
+  )
+
 let make_html_report l =
   match l with
   | [] ->
@@ -77,7 +86,7 @@ let make_html_report l =
   | l ->
       let buf = Buffer.create 1000 in
       let subject = "Uncaught exceptions over the last 24 hours" in
-      List.iter (fun (id, count, hi_prio_count, example) ->
+      List.iter (fun (id, count, hi_prio_count, service_counts, example) ->
         bprintf buf "
 <h2>Error #%s</h2>
 <p>
@@ -85,39 +94,69 @@ let make_html_report l =
   <br>
   Count: %i
   <br>
+  Counts by service: %s
+  <br>
   Example:
   <pre>%s\
   </pre>
 </p>
 "
-          id hi_prio_count count (Util_html.encode example)
+          id
+          hi_prio_count
+          count
+          (format_service_counts service_counts)
+          (Util_html.encode example)
       ) l;
       Some (subject, Buffer.contents buf)
+
+let create_counters () =
+  Hashtbl.create 10
+
+let incr_counter tbl k =
+  let r =
+    try Hashtbl.find tbl k
+    with Not_found ->
+      let r = ref 0 in
+      Hashtbl.add tbl k r;
+      r
+  in
+  incr r
+
+let get_counts tbl =
+  let l = Hashtbl.fold (fun k v acc -> (k, !v) :: acc) tbl [] in
+  List.sort (fun (k1, _) (k2, _) -> String.compare k1 k2) l
 
 let send_daily_aggregate () =
   let max_age = 86400. +. 60. in (* one day and some *)
   let tbl = Hashtbl.create 10 in
   read_latest max_age (fun x ->
-    let counter, hi_prio_counter, example =
+    let counter, hi_prio_counter, service_counters, example =
       try Hashtbl.find tbl x.error_id
       with Not_found ->
         let example = x.error_msg in
         let counter = ref 0 in
         let hi_prio_counter = ref 0 in
-        let v = (counter, hi_prio_counter, example) in
+        let service_counters = create_counters () in
+        let v = (counter, hi_prio_counter, service_counters, example) in
         Hashtbl.add tbl x.error_id v;
         v
     in
     incr counter;
+    let service = BatOption.default "other" x.error_service in
+    incr_counter service_counters service;
     if x.error_hi_prio then
       incr hi_prio_counter;
     return ()
   ) >>= fun () ->
-  let all = Hashtbl.fold (fun error_id (counter, hi_prio_counter, example) l ->
-    (error_id, !counter, !hi_prio_counter, example) :: l
-  ) tbl []
+  let all =
+    Hashtbl.fold (
+      fun error_id (counter, hi_prio_counter,
+                    service_counters, example) l ->
+        let service_counts = get_counts service_counters in
+        (error_id, !counter, !hi_prio_counter, service_counts, example) :: l
+    ) tbl []
   in
-  let all = List.sort (fun (_, n1, hi1, _) (_, n2, hi2, _) ->
+  let all = List.sort (fun (_, n1, hi1, _, _) (_, n2, hi2, _, _) ->
     let c = compare hi2 hi1 in
     if c <> 0 then c
     else
