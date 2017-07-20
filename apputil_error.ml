@@ -18,10 +18,12 @@ let report_error error_id error_msg =
           so as to not create a bottleneck when many identical errors
           are reported at the same time. *)
        Apputil_access.Uncaught.unprotected_put
-         error_id (Util_rng.hex 8) v (Util_time.now ())
+         error_id (Util_rng.hex 8) v (Util_time.now ()) >>= fun () ->
+       logf `Error "Reported error %s" error_id;
+       return ()
     )
     (fun e ->
-       logf `Error "Error.report failed: %s" (string_of_exn e);
+       logf `Error "Error reporting failed: %s" (string_of_exn e);
        return ()
     )
 
@@ -54,8 +56,6 @@ let catch_and_report context_name f g =
      | Lwt.Canceled when Util_shutdown.is_shutting_down () -> return ()
      | e -> report_exn context_name e
     ) >>= fun () ->
-    logf `Error "Reported exception: %s"
-      (string_of_exn e);
     g e
   )
 
