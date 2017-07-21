@@ -19,7 +19,7 @@ let report_error error_id error_msg =
           are reported at the same time. *)
        Apputil_access.Uncaught.unprotected_put
          error_id (Util_rng.hex 8) v (Util_time.now ()) >>= fun () ->
-       logf `Error "Reported error %s" error_id;
+       logf `Error "Reported error %s: %s" error_id error_msg;
        return ()
     )
     (fun e ->
