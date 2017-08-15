@@ -8,4 +8,5 @@ It won't build as is but most of the code was used in production.
 Description
 -----------
 
-Sorry, no description yet :cry:
+Utilities. In particular, this includes a system for recording errors
+in a database table and sending a daily summary email.
